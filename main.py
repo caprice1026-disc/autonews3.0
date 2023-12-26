@@ -257,6 +257,7 @@ def heavy_task(article_title, article_url):
 
         # 投稿した記事のIDを取得
         post_id = response.json()['id']
+        
     except Exception as e:
         logging.error(f"記事の投稿に失敗しました: {e}")
         traceback.print_exc()
