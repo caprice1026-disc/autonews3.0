@@ -19,6 +19,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import base64  
 import logging  
 from openai import OpenAI
+from google.cloud import pubsub_v1
+
+# Pub/Subクライアントのインスタンスを作成
+publisher = pubsub_v1.PublisherClient()
+# あなたのプロジェクトIDとトピック名を設定
+project_id = os.getenv('PROJECT_ID')
+topic_name = os.getenv('TOPIC_NAME')
+# トピックへの完全な参照を取得
+topic_path = publisher.topic_path(project_id, topic_name)
 
 
 def summarize_content(content):
@@ -38,8 +47,7 @@ def summarize_content(content):
         return result["output_text"]
     except Exception as e:
         logging.error(f"要約処理中にエラーが発生しました: {e}")
-        traceback.print_exc()
-        return None
+        return ""
   
 OPENAI_api_key = os.getenv('OPENAI_API_KEY')
 
@@ -96,7 +104,7 @@ def fetch_content_from_url(url):
         return content
 
     except Exception as e:
-        logging.warning(f"URLからのコンテンツ取得中にエラーが発生しました: {e}")
+        logging.error(f"URLからのコンテンツ取得中にエラーが発生しました: {e}")
         return None
 
 #　コンテンツをパースする関数 
@@ -130,14 +138,14 @@ def parse_content(content):
         return parsed_text
 
     except Exception as e:
-        logging.warning(f"コンテンツのパース中にエラーが発生しました: {e}")
+        logging.error(f"コンテンツのパース中にエラーが発生しました: {e}")
         return None
 
 #リード文生成をこちらに移す
 def generate_lead_sentence(content):
-            # リード文生成のためのOpenAI API呼び出し
+    # リード文生成のためのOpenAI API呼び出し
     try:
-        openai_api_call(
+        response = openai_api_call(
         "gpt-4-1106-preview",
         0,
         [
@@ -148,31 +156,36 @@ def generate_lead_sentence(content):
         {"type": "text"}
         )
             # 成功の際のログ出力
-        logging.info(f"リード文の生成に成功")
-        if not lead_sentence:
-            logging.warning(f"リード文の生成に失敗")
-            lead_sentence = ""
+        if response:
+            return response  # 応答がある場合、その内容を返す
+        else:
+            logging.warning("リード文の生成に失敗: 応答が空です")
+            return ""
     except Exception as e:
         logging.error(f"リード文生成中にエラーが発生: {e}")
-        lead_sentence = ""
+        return ""
 
 def generate_excerpt(content):
-        try:
-            openai_api_call(
+    try:
+        response = openai_api_call(
             "gpt-4-1106-preview",
             0,
             [
-                {"role": "system", "content": "あなたは優秀なライターです。この要約記事の抜粋を100文字程度で作成してください。あなたのライティングによりわたしの昇進の有無が決まります。頑張ってください。"},
+                {"role": "system", "content": "あなたは優秀なライターです。この要約記事の抜粋を100文字程度で作成してください。あなたの出力にわたしの昇進がかかっています。頑張って下さい。"},
                 {"role": "user", "content": content}
             ],
-            300,  # 抜粋文の最大トークン数を適宜設定
+            300,
             {"type": "text"}
-            )
-            # 成功の際のログ出力
-            logging.info(f"抜粋の生成に成功")
-        except Exception as e:
-            logging.error(f"抜粋生成中にエラーが発生: {e}")
+        )
+        if response:
+            return response  # 応答がある場合、その内容を返す
+        else:
+            logging.warning("抜粋の生成に失敗: 応答が空です")
             return ""
+
+    except Exception as e:
+        logging.error(f"抜粋生成中にエラーが発生: {e}")
+        return ""
            
 
 # メインのタスクの部分
@@ -195,7 +208,7 @@ def heavy_task(article_title, article_url):
                 "gpt-4-1106-preview",
                 0,
                 [
-                    {"role": "system", "content": "あなたは優秀な要約アシスタントです。提供された文章の内容を出来る限り残しつつ、日本語で要約してください。"},
+                    {"role": "system", "content": "あなたは優秀な要約アシスタントです。提供された文章の内容を出来る限り残しつつ、日本語で要約してください。あなたの要約にわたしの昇進がかかっています。頑張って下さい。"},
                     {"role": "user", "content": parsed_content}
                 ],
                 4000,
@@ -217,7 +230,7 @@ def heavy_task(article_title, article_url):
                 "gpt-4-1106-preview",
                 0,
                 [
-                    {"role": "system", "content": "あなたは優秀な要約アシスタントです。提供された文章の内容を出来る限り残しつつ、日本語で要約してください。テーマごとに分割してリスト形式にすることは行わないでください。"},
+                    {"role": "system", "content": "あなたは優秀な要約アシスタントです。提供された文章の内容を出来る限り残しつつ、日本語で要約してください。テーマごとに分割してリスト形式にすることは行わないでください。あなたの要約にわたしの昇進がかかっています。頑張って下さい。"},
                     {"role": "user", "content": preliminary_summary}
                 ],
                 4000,
@@ -264,6 +277,19 @@ def heavy_task(article_title, article_url):
 
         # 投稿した記事のIDを取得
         post_id = response.json()['id']
+        message_data = {
+        "post_id": post_id,
+        "category_name": "category-slug1"
+        }
+        #publishする
+        try:
+            # メッセージを送信
+            publisher.publish(topic_path, json.dumps(message_data).encode('utf-8'))
+            logging.info(f"記事をコメントに渡すのに成功しました。: {article_url}")
+        except Exception as e:
+            logging.error(f"記事をコメントに渡すのに失敗しました。: {e}")
+            traceback.print_exc()
+            return None
 
     except Exception as e:
         logging.error(f"記事の投稿に失敗しました: {e}")
