@@ -279,7 +279,8 @@ def heavy_task(article_title, article_url):
         post_id = response.json()['id']
         message_data = {
         "post_id": post_id,
-        "category_name": "category-slug1"
+        "category_name": "category-slug1",
+        "content": final_summary
         }
         #publishする
         try:
