@@ -133,6 +133,48 @@ def parse_content(content):
         logging.warning(f"コンテンツのパース中にエラーが発生しました: {e}")
         return None
 
+#リード文生成をこちらに移す
+def generate_lead_sentence(content):
+            # リード文生成のためのOpenAI API呼び出し
+    try:
+        openai_api_call(
+        "gpt-4-1106-preview",
+        0,
+        [
+            {"role": "system", "content": "あなたは優秀なライターです。この要約記事のタイトルを新聞の見出しのような口調で、1文で作成してください。"},
+            {"role": "user", "content": content}
+        ],
+        150,  # リード文の最大トークン数を適宜設定
+        {"type": "text"}
+        )
+            # 成功の際のログ出力
+        logging.info(f"リード文の生成に成功")
+        if not lead_sentence:
+            logging.warning(f"リード文の生成に失敗")
+            lead_sentence = ""
+    except Exception as e:
+        logging.error(f"リード文生成中にエラーが発生: {e}")
+        lead_sentence = ""
+
+def generate_excerpt(content):
+        try:
+            openai_api_call(
+            "gpt-4-1106-preview",
+            0,
+            [
+                {"role": "system", "content": "あなたは優秀なライターです。この要約記事の抜粋を100文字程度で作成してください。あなたのライティングによりわたしの昇進の有無が決まります。頑張ってください。"},
+                {"role": "user", "content": content}
+            ],
+            300,  # 抜粋文の最大トークン数を適宜設定
+            {"type": "text"}
+            )
+            # 成功の際のログ出力
+            logging.info(f"抜粋の生成に成功")
+        except Exception as e:
+            logging.error(f"抜粋生成中にエラーが発生: {e}")
+            return ""
+           
+
 # メインのタスクの部分
 def heavy_task(article_title, article_url):
     try:
@@ -186,49 +228,14 @@ def heavy_task(article_title, article_url):
             if not final_summary:
                 logging.warning(f"要約の洗練に失敗: {article_url}")
                 return None
-        
-        # リード文生成のためのOpenAI API呼び出し
-        try:
-            lead_sentence = openai_api_call(
-            "gpt-4-1106-preview",
-            0,
-            [
-                {"role": "system", "content": "あなたは優秀なライターです。この要約記事のタイトルを新聞の見出しのような口調で、1文で作成してください。"},
-                {"role": "user", "content": final_summary}
-            ],
-            150,  # リード文の最大トークン数を適宜設定
-            {"type": "text"}
-            )
-            # 成功の際のログ出力
-            logging.info(f"リード文の生成に成功: {article_url}")
-            if not lead_sentence:
-                logging.warning(f"リード文の生成に失敗: {article_url}")
-                lead_sentence = "リード文の生成に失敗しました。"
-        except Exception as e:
-            logging.error(f"リード文生成中にエラーが発生: {e}")
-            lead_sentence = "リード文の生成中にエラーが発生しました。"
-
-                # リード文生成のためのOpenAI API呼び出し
-        try:
-            excerpt = openai_api_call(
-            "gpt-4-1106-preview",
-            0,
-            [
-                {"role": "system", "content": "あなたは優秀なライターです。この要約記事の抜粋を100文字程度で作成してください。あなたのライティングによりわたしの昇進の有無が決まります。頑張ってください。"},
-                {"role": "user", "content": final_summary}
-            ],
-            300,  # リード文の最大トークン数を適宜設定
-            {"type": "text"}
-            )
-            # 成功の際のログ出力
-            logging.info(f"リード文の生成に成功: {article_url}")
-            if not excerpt:
-                logging.warning(f"リード文の生成に失敗: {article_url}")
-                excerpt = "リード文の生成に失敗しました。"
-        except Exception as e:
-            logging.error(f"リード文生成中にエラーが発生: {e}")
-            excerpt = "リード文の生成中にエラーが発生しました。"
-
+        lead_sentence = generate_lead_sentence(final_summary)
+        if not lead_sentence:
+            logging.warning(f"リード文の生成に失敗")
+            lead_sentence = ""
+        excerpt = generate_excerpt(final_summary)
+        if not excerpt:
+            logging.warning(f"抜粋の生成に失敗")
+            excerpt = ""
         # WordPressのURLとエンドポイント
         url = 'https://your-wordpress-site.com/wp-json/wp/v2'
 
@@ -249,7 +256,7 @@ def heavy_task(article_title, article_url):
          "excerpt": excerpt,
          "categories": ["category-slug1"],
          "tags": ["tag-slug1", "tag-slug2"],
-         "author": "user_id"  
+         "author": "1"  
         }
 
         # 記事を投稿
@@ -257,7 +264,7 @@ def heavy_task(article_title, article_url):
 
         # 投稿した記事のIDを取得
         post_id = response.json()['id']
-        
+
     except Exception as e:
         logging.error(f"記事の投稿に失敗しました: {e}")
         traceback.print_exc()
