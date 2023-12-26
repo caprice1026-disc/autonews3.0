@@ -138,15 +138,12 @@ def main(event, context):
         category = message['category']
         post_id = message['post_id']
 
-        # 賛成と反対の意見を生成
-        agree_opinion = generate_opinion(content, category, "agree")
-        if agree_opinion:
-        # `agree_opinion`から`author_name`と`comment_content`を分割
-            author_name, comment_content = agree_opinion.split(': ', 1)
-        disagree_opinion = generate_opinion(content, category, "disagree")
-        if disagree_opinion:
-            # `disagree_opinion`から`author_name`と`comment_content`を分割
-            author_name, comment_content = disagree_opinion.split(': ', 1)
-        post_comment_to_wordpress(post_id, author_name, comment_content)
+        # 賛成と反対の意見を生成し、それぞれをWordPressに投稿
+        for position in ["agree", "disagree"]:
+            opinion = generate_opinion(content, category, position)
+            if opinion:
+                author_name, comment_content = opinion.split(': ', 1)
+                post_comment_to_wordpress(post_id, author_name, comment_content)
+                
     except Exception as e:
         logging.error(f"メイン処理中にエラーが発生しました: {e}")
