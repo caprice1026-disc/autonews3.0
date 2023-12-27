@@ -124,9 +124,6 @@ def post_comment_to_wordpress(post_id, author_name, content):
     except requests.RequestException as e:
         logging.error(f"WordPressへのコメント投稿に失敗しました: {e}")
 
-
-
-
 def main(event, context):
     try:
         message = base64.b64decode(event['data']).decode('utf-8')
