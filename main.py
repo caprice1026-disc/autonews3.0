@@ -268,15 +268,21 @@ def heavy_task(article_title, article_url):
          "content": f"<p>from <a href=\"{article_url}\" target=\"_blank\">{article_title}</a>.</p>{final_summary}",
          "excerpt": excerpt,
          "categories": ["category-slug1"],
-         "tags": ["tag-slug1", "tag-slug2"],
-         "author": "1"  
+         "tags": ["tag-slug1"],
+         "author": "1" , 
+         "status": "publish" 
         }
 
         # 記事を投稿
-        response = requests.post(url + '/posts', headers=header, data=data)
+        response = requests.post(url, headers=header, data=data)
 
         # 投稿した記事のIDを取得
-        post_id = response.json()['id']
+        response_data = response.json()
+        if 'id' not in response_data:
+            logging.error("投稿した記事にIDが含まれていません。")
+            return None
+        post_id = response_data['id']
+
         message_data = {
         "post_id": post_id,
         "category_name": "category-slug1",

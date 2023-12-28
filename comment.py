@@ -7,17 +7,12 @@ from openai import OpenAI
 import random
 import base64
 import requests
+from requests.auth import HTTPBasicAuth
+
+
 
 # 環境変数からAPIキーとその他の設定を取得
 OPENAI_api_key = os.getenv('OPENAI_API_KEY')
-project_id = os.getenv('PROJECT_ID')
-subscription_name = os.getenv('SUBSCRIPTION_NAME')
-wordpress_url = os.getenv('WORDPRESS_URL')  # WordPress APIのURL
-
-# Pub/Subサブスクライバーの設定
-subscriber = pubsub_v1.SubscriberClient()
-subscription_path = subscriber.subscription_path(project_id, subscription_name)
-
 
 # OpenAI API呼び出し関数
 def openai_api_call(model, temperature, messages, max_tokens, response_format):
@@ -105,7 +100,7 @@ def generate_opinion(content, category, position):
                     {"role": "system", "content": f'あなたはペルソナである"{persona_name}"として意見を生成してください。この人は、"{full_persona}"提供された文章の内容に対し日本語で意見を生成してください。'},
                     {"role": "user", "content": content}
                 ],
-                1000,
+                500,
                 {"type": "text"}
             )
             return f'{persona_name}: {opinion}'
@@ -115,14 +110,37 @@ def generate_opinion(content, category, position):
 
 def post_comment_to_wordpress(post_id, author_name, content):
     try:
-        response = requests.post(f'{wordpress_url}/wp-json/wp/v2/comments', data={
-            'post': post_id,
-            'author_name': author_name,
-            'content': content
-        })
+        # WordPressのURLとエンドポイント
+        wordpress_url = os.environ['WORDPRESS_URL']
+        url = f'{wordpress_url}/wp-json/wp/v2/comments'
+
+        # ベーシック認証のためのユーザー名とパスワード
+        # 認証情報を環境変数から取得
+        username = os.environ['USERNAME']
+        password = os.environ['PASSWORD']
+
+        # ベーシック認証のためのヘッダーを作成
+        credentials = username + ':' + password
+        token = base64.b64encode(credentials.encode())
+        headers = {'Authorization': 'Basic ' + token.decode('utf-8')}
+
+        # WordPressへのコメント投稿
+        response = requests.post(
+            url,
+            headers=headers,
+            data={
+                'post': post_id,
+                'author_name': author_name,
+                'content': content
+            }
+        )
         response.raise_for_status()
+
+        return response.json()
+        
     except requests.RequestException as e:
         logging.error(f"WordPressへのコメント投稿に失敗しました: {e}")
+        return None
 
 def main(event, context):
     try:
