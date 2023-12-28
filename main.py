@@ -250,7 +250,7 @@ def heavy_task(article_title, article_url):
             logging.warning(f"抜粋の生成に失敗")
             excerpt = ""
         # WordPressのURLとエンドポイント
-        url = 'https://your-wordpress-site.com/wp-json/wp/v2'
+        url = os.environ['WP_URL'] + '/wp-json/wp/v2/posts'
 
         # ベーシック認証のためのユーザー名とパスワード
         # 認証情報を環境変数から取得
